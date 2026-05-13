@@ -1,0 +1,22 @@
+# Entornos Virtuales
+venv/
+env/
+.env
+
+# Archivos de caché y compilación
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Archivos de Jupyter
+.ipynb_checkpoints/
+
+# Archivos temporales del sistema
+.DS_Store
+*.DS_Store
+.AppleDouble
+.LSOverride
+
+# Ocultar carpeta git (aunque git ignora .git, está bien ser explícito)
+.git/
