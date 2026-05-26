@@ -1,0 +1,17 @@
+# Entorno virtual de Python
+.venv/
+env/
+venv/
+ENV/
+
+# Caches de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Archivos de sistema y configuraciones IDE
+.DS_Store
+.ipynb_checkpoints/
+.vscode/
+.idea/
