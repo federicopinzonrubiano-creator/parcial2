@@ -98,6 +98,142 @@ def generar_tabla_municipios(df_crudo, base_dir):
     return tabla
 
 
+def generar_tabla_municipios_sin_manizales(df_crudo, base_dir):
+    """
+    Genera una tabla comparativa por municipio sin contar Manizales,
+    mostrando cantidad y porcentaje de casos segun estado.
+    Guarda CSV en 'datos_procesados/tabla_municipios_sin_manizales.csv'
+    y un grafico de barras en 'graficos/9_municipios_sin_manizales.png'.
+    """
+    print("\n      [Tabla Comparativa] Casos por Municipio (Sin Manizales):")
+
+    df = df_crudo.copy()
+    df['Estado'] = df['Estado'].astype(str).str.strip()
+    df['Nombre municipio'] = df['Nombre municipio'].astype(str).str.strip().str.upper()
+
+    # Filtrar Manizales
+    df = df[df['Nombre municipio'] != 'MANIZALES']
+
+    # --- Tabla pivot: filas = municipio, columnas = estado ---
+    tabla = df.pivot_table(
+        index='Nombre municipio',
+        columns='Estado',
+        aggfunc='size',
+        fill_value=0
+    )
+
+    # Orden de menor a mayor gravedad
+    orden_real = ['Leve', 'Asintomático', 'Moderado', 'Grave', 'Fallecido']
+    cols_estado = [c for c in orden_real if c in tabla.columns]
+    tabla = tabla.reindex(columns=cols_estado, fill_value=0)
+
+    # Total y porcentaje por municipio
+    tabla['Total'] = tabla.sum(axis=1)
+    for col in cols_estado:
+        tabla[f'% {col}'] = (tabla[col] / tabla['Total'] * 100).round(1)
+
+    print(tabla.to_string())
+
+    # Guardar CSV
+    ruta_procesados = os.path.join(base_dir, 'datos_procesados')
+    os.makedirs(ruta_procesados, exist_ok=True)
+    tabla.to_csv(os.path.join(ruta_procesados, 'tabla_municipios_sin_manizales.csv'))
+    print("\n      Tabla sin Manizales guardada en 'datos_procesados/tabla_municipios_sin_manizales.csv'.")
+
+    carpeta_evidencias = os.path.join(base_dir, 'graficos')
+    os.makedirs(carpeta_evidencias, exist_ok=True)
+
+    # --- Grafico: Barras apiladas por municipio sin Manizales ---
+    colores = ['#2ecc71', '#a8e6cf', '#f39c12', '#e74c3c', '#7f0000']
+    
+    ax = tabla[cols_estado].plot(
+        kind='bar',
+        stacked=True,
+        figsize=(12, 6),
+        color=colores[:len(cols_estado)]
+    )
+    plt.title('Casos COVID-19 por Municipio (Excluyendo Manizales) y Estado de Salud', fontsize=14, fontweight='bold')
+    plt.xlabel('Municipio')
+    plt.ylabel('Numero de Casos')
+    plt.xticks(rotation=45, ha='right')
+    plt.legend(title='Estado', bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+    plt.savefig(os.path.join(carpeta_evidencias, '9_municipios_sin_manizales.png'), bbox_inches='tight')
+    plt.close()
+    print("      Grafico sin Manizales guardado en 'graficos/9_municipios_sin_manizales.png'.")
+
+    return tabla
+
+
+def generar_grafico_torta_edad(df_clean, base_dir):
+    """
+    Genera un grafico de torta de la distribucion de edad en tres intervalos:
+    1 a 30 años, 31 a 60 años, y más de 60 años.
+    Guarda CSV en 'datos_procesados/tabla_intervalos_edad.csv'
+    y grafico en 'graficos/10_distribucion_edad_torta.png'.
+    """
+    print("\n      [Grafico de Torta] Distribucion de Casos por Intervalos de Edad:")
+    
+    df = df_clean.copy()
+    df['Edad'] = pd.to_numeric(df['Edad'], errors='coerce')
+    df = df.dropna(subset=['Edad'])
+
+    # Crear intervalos
+    bins = [0, 30, 60, float('inf')]
+    labels = ['1 a 30 años', '31 a 60 años', 'Más de 60 años']
+    df['Intervalo_Edad'] = pd.cut(df['Edad'], bins=bins, labels=labels)
+
+    # Calcular frecuencias
+    frec_abs = df['Intervalo_Edad'].value_counts()
+    frec_rel = df['Intervalo_Edad'].value_counts(normalize=True) * 100
+    
+    tabla_edad = pd.DataFrame({
+        'Intervalo de Edad': frec_abs.index,
+        'Casos': frec_abs.values,
+        'Porcentaje (%)': frec_rel.values.round(2)
+    })
+    
+    # Reordenar según los intervalos lógicos
+    tabla_edad['Intervalo de Edad'] = pd.Categorical(tabla_edad['Intervalo de Edad'], categories=labels, ordered=True)
+    tabla_edad = tabla_edad.sort_values('Intervalo de Edad').reset_index(drop=True)
+    
+    print(tabla_edad.to_string(index=False))
+
+    # Guardar CSV
+    ruta_procesados = os.path.join(base_dir, 'datos_procesados')
+    os.makedirs(ruta_procesados, exist_ok=True)
+    tabla_edad.to_csv(os.path.join(ruta_procesados, 'tabla_intervalos_edad.csv'), index=False)
+    print("\n      Tabla de intervalos de edad guardada en 'datos_procesados/tabla_intervalos_edad.csv'.")
+
+    # --- Gráfico de Torta Premium ---
+    plt.figure(figsize=(8, 8))
+    colores_pie = ['#3498db', '#2ecc71', '#e74c3c']  # Azul suave, Verde suave, Rojo suave
+    
+    # Efecto premium de separación sutil y sombra
+    explode = (0.02, 0.02, 0.05) 
+    
+    plt.pie(
+        tabla_edad['Casos'],
+        explode=explode,
+        labels=tabla_edad['Intervalo de Edad'],
+        autopct='%1.1f%%',
+        startangle=140,
+        colors=colores_pie,
+        shadow=True,
+        textprops={'fontsize': 12, 'fontweight': 'bold', 'color': '#2c3e50'}
+    )
+    
+    plt.title('Distribucion Porcentual de Casos COVID-19 por Grupos de Edad\n(Caldas)', fontsize=14, fontweight='bold', pad=20)
+    
+    carpeta_evidencias = os.path.join(base_dir, 'graficos')
+    os.makedirs(carpeta_evidencias, exist_ok=True)
+    plt.savefig(os.path.join(carpeta_evidencias, '10_distribucion_edad_torta.png'), dpi=150, bbox_inches='tight')
+    plt.close()
+    print("      Grafico de torta guardado en 'graficos/10_distribucion_edad_torta.png'.")
+
+    return tabla_edad
+
+
 def generar_analisis_edad_estado(df_crudo, base_dir):
     """
     Analiza la relacion entre la Edad del paciente y su Estado de salud
@@ -224,6 +360,7 @@ def ejecutar_analisis_exploratorio(df_clean, base_dir, df_crudo=None):
     # 3. Tabla comparativa + heatmap por municipio (requiere datos crudos)
     if df_crudo is not None:
         generar_tabla_municipios(df_crudo, base_dir)
+        generar_tabla_municipios_sin_manizales(df_crudo, base_dir)
         generar_analisis_edad_estado(df_crudo, base_dir)
 
     # 4. Generacion de Graficos sobre df_clean
@@ -256,6 +393,8 @@ def ejecutar_analisis_exploratorio(df_clean, base_dir, df_crudo=None):
     plt.tight_layout()
     plt.savefig(os.path.join(carpeta_evidencias, '3_matriz_correlacion.png'))
     plt.close()
+
+    generar_grafico_torta_edad(df_clean, base_dir)
 
     print(f"\n    EDA finalizado. Las evidencias visuales fueron guardadas en 'graficos/'.")
 

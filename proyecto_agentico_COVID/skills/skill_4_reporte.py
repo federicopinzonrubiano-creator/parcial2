@@ -43,7 +43,7 @@ def generar_reporte_ejecutivo(metricas_modelo, base_dir):
     
     # 2. Copiar archivos CSV procesados
     ruta_procesados = os.path.join(base_dir, 'datos_procesados')
-    csvs_a_copiar = ['tabla_municipios_por_estado.csv', 'estadisticas_edad_por_estado.csv']
+    csvs_a_copiar = ['tabla_municipios_por_estado.csv', 'tabla_municipios_sin_manizales.csv', 'estadisticas_edad_por_estado.csv', 'tabla_intervalos_edad.csv']
     
     for csv_file in csvs_a_copiar:
         origen = os.path.join(ruta_procesados, csv_file)
@@ -64,7 +64,9 @@ def generar_reporte_ejecutivo(metricas_modelo, base_dir):
         '5_heatmap_municipio_estado.png',
         '6_boxplot_edad_por_estado.png',
         '7_violin_edad_por_estado.png',
-        '8_kde_edad_por_estado.png'
+        '8_kde_edad_por_estado.png',
+        '9_municipios_sin_manizales.png',
+        '10_distribucion_edad_torta.png'
     ]
     
     for graph in graficos_a_copiar:
@@ -97,6 +99,26 @@ def generar_reporte_ejecutivo(metricas_modelo, base_dir):
         tabla_municipios_md = dataframe_a_markdown(df_mun_sorted.head(12))
     else:
         tabla_municipios_md = "| Municipio | Leve | Fallecido | Total | % Leve | % Fallecido |\n|---|---|---|---|---|---|"
+
+    # C. Tabla de Municipios Sin Manizales
+    tabla_municipios_sin_manizales_md = ""
+    ruta_csv_mun_sin = os.path.join(dir_tablas, 'tabla_municipios_sin_manizales.csv')
+    if os.path.exists(ruta_csv_mun_sin):
+        df_mun_sin = pd.read_csv(ruta_csv_mun_sin)
+        # Ordenar por Total de casos descendente para ver el volumen de los demas municipios
+        df_mun_sin_sorted = df_mun_sin.sort_values(by='Total', ascending=False)
+        tabla_municipios_sin_manizales_md = dataframe_a_markdown(df_mun_sin_sorted)
+    else:
+        tabla_municipios_sin_manizales_md = "| Municipio | Leve | Fallecido | Total | % Leve | % Fallecido |\n|---|---|---|---|---|---|"
+
+    # D. Tabla de Intervalos de Edad (Gráfico de Torta)
+    tabla_intervalos_edad_md = ""
+    ruta_csv_int_edad = os.path.join(dir_tablas, 'tabla_intervalos_edad.csv')
+    if os.path.exists(ruta_csv_int_edad):
+        df_int_edad = pd.read_csv(ruta_csv_int_edad)
+        tabla_intervalos_edad_md = dataframe_a_markdown(df_int_edad)
+    else:
+        tabla_intervalos_edad_md = "| Intervalo de Edad | Casos | Porcentaje (%) |\n|---|---|---|"
 
     # 5. Construccion del Reporte Ejecutivo en Markdown
     reporte_content = f"""# Reporte Ejecutivo: Proyecto Agentico COVID
@@ -135,6 +157,18 @@ A continuacion se presentan las estadisticas descriptivas detalladas de la edad 
 
 *Nota: Datos obtenidos a partir del analisis consolidado.*
 
+#### Distribucion por Intervalos de Edad (Grafico de Torta)
+Para comprender mejor la composicion demografica por grupos de edad, segmentamos la poblacion de pacientes en tres intervalos clave: **1 a 30 anos**, **31 a 60 anos** y **Mas de 60 anos**. 
+
+A continuacion se presenta la distribucion total de los casos reportados por grupo de edad:
+
+{tabla_intervalos_edad_md}
+
+*Nota: Datos agrupados a partir de los registros de edad limpios.*
+
+El grafico de torta premium muestra la proporcion relativa de cada grupo:
+- ![Distribucion Porcentual de Edad](graficos/10_distribucion_edad_torta.png)
+
 #### Explicacion Clinica y Estadistica de la Relacion de Edad
 - **Edad Promedio de Fallecidos**: La media de edad de los pacientes fallecidos es de **66.8 anos** (con una mediana de 68 aos), en contraste directo con los casos de gravedad leve cuya media de edad es de **40.4 anos** (mediana de 39 anos). 
 - **Distribucion y Dispersion**: El 50% de las personas fallecidas se concentran en el rango de los 58 a los 78 anos de edad. Esto evidencia de forma estadistica que la senescencia y la acumulacion de comorbilidades asociadas a la edad avanzada constituyen el principal factor de riesgo clinico para desenlaces fatales en la region de Caldas.
@@ -165,6 +199,21 @@ A continuacion se detallan los 12 municipios con mayor porcentaje de fatalidad d
   - ![Distribucion de Estados por Municipio](graficos/4_municipios_por_estado.png)
   - ![Heatmap de Proporcion Municipio vs Estado](graficos/5_heatmap_municipio_estado.png)
 
+### 2.b Distribucion Geografica Excluyendo Manizales
+Dado que Manizales concentra mas del 70% de los casos totales del departamento, su volumen absoluto tiende a eclipsar y dificultar la visualizacion del comportamiento de la enfermedad en el resto de los municipios de Caldas. 
+
+A continuacion, se presenta la tabla comparativa detallada para todos los municipios de Caldas, **excluyendo a Manizales**, ordenados de mayor a menor numero de casos totales:
+
+{tabla_municipios_sin_manizales_md}
+
+*Nota: Datos ordenados por el numero total de casos registrados.*
+
+#### Explicacion Visual y Epidemiologica (Sin Manizales)
+Al retirar a la capital del analisis grafico, logramos observar con mucha mayor claridad el peso relativo de municipios como **Villamaria (1,713 casos)**, **La Dorada (999 casos)** y **Chinchina (967 casos)**, los cuales lideran la incidencia fuera de la capital.
+Esta perspectiva sin sesgo de escala permite contrastar de forma directa y proporcional la gravedad en municipios intermedios y pequenos:
+
+- ![Casos COVID-19 por Municipio (Excluyendo Manizales)](graficos/9_municipios_sin_manizales.png)
+
 ---
 
 ## Resultados del Modelado Predictivo (Machine Learning)
@@ -176,13 +225,33 @@ Para evitar que los modelos matematicos predijeran de forma sesgada la clase may
 1. **Division Estratificada (Stratified Train/Test Split)**: Asegurando la misma proporcion de casos graves (2.31%) tanto en el conjunto de entrenamiento como en el de validacion.
 2. **Ponderacion Balanceada de Clases (Class Weighting)**: Penalizando fuertemente los errores cometidos sobre la clase minoritaria (gravedad 1) durante el entrenamiento de los algoritmos.
 
-### Comparativa de Modelos
-Se entrenaron y evaluaron dos algoritmos competidores en el conjunto de test independiente utilizando el puntaje F1 ponderado (Weighted F1-Score) as metrica de seleccion:
+### Comparativa de Modelos y Justificacion del Algoritmo Ganador
+Se entrenaron y evaluaron dos algoritmos competidores en el conjunto de test independiente utilizando el puntaje F1 ponderado (Weighted F1-Score) como metrica de seleccion:
 
 - **Regresion Logistica**: F1-Score = {metricas_modelo['f1_rl']:.4f}
 - **Random Forest Classifier (Ganador)**: F1-Score = {metricas_modelo['f1_rf']:.4f}
 
 El algoritmo seleccionado por el orquestador debido a su superior desempeño predictivo es **{metricas_modelo['nombre_ganador']}**.
+
+#### ¿Por que se utilizo Random Forest y por que supero a la Regresion Logistica?
+
+La eleccion e implementacion de **Random Forest** como el algoritmo nucleo de este estudio responde a razones metodologicas y del comportamiento clinico de la enfermedad:
+
+1. **Modelado de Relaciones No Lineales Complejas**: 
+   La COVID-19 afecta la salud de forma altamente no lineal. Por ejemplo, el riesgo de complicacion no avanza de manera constante o de forma directamente proporcional con cada ano de edad; en su lugar, se dispara exponencialmente al superar los 60 anos de edad.
+   - La **Regresion Logistica** es un clasificador lineal que asume que la relacion logit es lineal y constante, lo que limita su capacidad para capturar cambios abruptos o fronteras de riesgo complejas.
+   - **Random Forest**, al ser un ensamble de arboles de decision, segmenta de forma natural y recursiva el espacio de las variables, adaptandose de forma optima a los saltos en el comportamiento del virus sin requerir parametrizaciones artificiales.
+
+2. **Deteccion Automatica de Interacciones de Variables**:
+   La gravedad de un paciente no depende unicamente de factores aislados, sino de la combinacion sinergica de ellos (por ejemplo, el impacto combinado de la Edad avanzada con el Sexo biologico, o el tipo de contagio en un municipio apartado). 
+   Mientras que la Regresion Logistica requiere la formulacion explicita y manual de terminos de interaccion polinomiales, Random Forest mapea y explota de manera nativa estas interacciones complejas durante el crecimiento de sus ramas.
+
+3. **Resistencia al Desbalance Extremo mediante Criterio de Enrutamiento Nodo a Nodo**:
+   El dataset cuenta con un severo desbalance de clases (solo el 2.31% de casos graves). Al aplicar la ponderacion estrategica (`class_weight='balanced'`), Regresion Logistica se limita a aplicar una penalizacion en la funcion de perdida global.
+   En contraste, **Random Forest** aplica esta ponderacion directamente en el calculo de la ganancia de informacion de Gini/Entropia en cada nodo individual de cada arbol. Esto obliga a cada arbol del ensamble a tomar decisiones locales robustas para no omitir la clase minoritaria (Graves/Fallecidos), logrando un recall muy superior.
+
+4. **Reduccion de Varianza mediante Ensamble (Bagging)**:
+   Al promediar las decisiones de **100 estimadores independientes** entrenados sobre muestras aleatorias del conjunto de datos y subconjuntos aleatorios de variables, Random Forest anula la variabilidad extrema de los arboles de decision individuales. Esto le dota de una resistencia sobresaliente frente al sobreajuste (*overfitting*), garantizando que el modelo sea robusto frente a ruido en los registros oficiales.
 
 ### Reporte de Clasificacion Detallado (Modelo Ganador)
 
@@ -308,6 +377,42 @@ A continuacion se anexan las figuras de distribucion y correlacion general:
         ]
     })
     
+    # Distribución por Intervalos de Edad (Gráfico de Torta)
+    cells.append({
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": [
+            "### 2.b Analisis por Intervalos de Edad (Grafico de Torta)\n\n",
+            "Para un analisis demografico mas directo, segmentamos a los pacientes en tres rangos de edad clave: **1 a 30 anos**, **31 a 60 anos** y **Mas de 60 anos**.\n\n",
+            "Cargamos la tabla de frecuencias de estos intervalos:"
+        ]
+    })
+    
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "metadata": {},
+        "outputs": [],
+        "source": [
+            "# Cargar tabla de intervalos de edad\n",
+            "df_int_edad = pd.read_csv('tablas/tabla_intervalos_edad.csv')\n",
+            "\n",
+            "# Estilizar con degradado verde para destacar volumen de casos\n",
+            "df_int_edad.style.background_gradient(subset=['Casos'], cmap='Greens')\\"
+            ".format({'Casos': '{:,}', 'Porcentaje (%)': '{:.2f}%'})\n"
+        ]
+    })
+
+    cells.append({
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": [
+            "#### Proporcion Porcentual por Grupo de Edad (Grafico de Torta)\n\n",
+            "El siguiente grafico de torta premium ilustra la composicion demografica porcentual de los casos de COVID-19 en Caldas:\n\n",
+            "![Grafico de Torta de Edad](graficos/10_distribucion_edad_torta.png)"
+        ]
+    })
+    
     # Explicacion e imagenes de edad
     cells.append({
         "cell_type": "markdown",
@@ -370,6 +475,46 @@ A continuacion se anexan las figuras de distribucion y correlacion general:
         ]
     })
     
+    # Analisis por Municipio sin Manizales
+    cells.append({
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": [
+            "### 3.b Analisis Geografico Excluyendo Manizales\n\n",
+            "Para un analisis visual y comparativo mas equilibrado de los municipios intermedios y rurales, excluimos a Manizales del siguiente reporte, ya que su gran volumen de casos (mas de 16,000) domina la escala visual de los graficos.\n\n",
+            "A continuacion cargamos e imprimimos la tabla completa de los municipios de Caldas (sin Manizales), ordenada por cantidad de casos totales:"
+        ]
+    })
+    
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "metadata": {},
+        "outputs": [],
+        "source": [
+            "# Cargar la tabla de municipios sin Manizales\n",
+            "df_mun_sin = pd.read_csv('tablas/tabla_municipios_sin_manizales.csv')\n",
+            "\n",
+            "# Ordenar por casos totales descendente\n",
+            "df_mun_sin_sorted = df_mun_sin.sort_values(by='Total', ascending=False)\n",
+            "\n",
+            "# Estilizar la tabla en degradado azul para total y rojo para fatalidad\n",
+            "df_mun_sin_sorted.style.background_gradient(subset=['Total'], cmap='Blues')\\"
+            ".background_gradient(subset=['% Fallecido'], cmap='Reds')\\"
+            ".format({'% Leve': '{:.1f}%', '% Fallecido': '{:.1f}%', 'Total': '{:,}'})\n"
+        ]
+    })
+
+    cells.append({
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": [
+            "#### Visualizacion Alternativa del Impacto Municipal (Sin Manizales)\n\n",
+            "El siguiente grafico de barras apiladas nos permite apreciar detalladamente la distribucion de casos en cada uno de los municipios sin la distorsion de escala generada por la capital:\n\n",
+            "![Casos por Municipio sin Manizales](graficos/9_municipios_sin_manizales.png)"
+        ]
+    })
+    
     # Modelado predictivo
     cells.append({
         "cell_type": "markdown",
@@ -381,7 +526,13 @@ A continuacion se anexan las figuras de distribucion y correlacion general:
             "### Comparativa de F1-Scores Ponderados en Test:\n\n",
             "- **Regresion Logistica**: F1-Score = " + f"{metricas_modelo['f1_rl']:.4f}\n" +
             "- **Random Forest Classifier (Ganador)**: F1-Score = " + f"{metricas_modelo['f1_rf']:.4f}\n\n" +
-            "El modelo con mejor desempeno general es **" + metricas_modelo['nombre_ganador'] + "**."
+            "El modelo con mejor desempeno general es **" + metricas_modelo['nombre_ganador'] + "**.\n\n",
+            "#### ¿Por que se utilizo Random Forest y por que supero a la Regresion Logistica?\n\n",
+            "La eleccion de **Random Forest** responde a razones fundamentales de modelado demografico y epidemiologico:\n\n",
+            "1. **Modelado No Lineal**: La gravedad de COVID-19 tiene un comportamiento altamente no lineal (por ejemplo, el riesgo de letalidad se dispara exponencialmente despues de los 60 anos). La Regresion Logistica asume fronteras de decision lineales, mientras que Random Forest segmenta el espacio mediante decisiones locales de enrutamiento mucho mas flexibles.\n",
+            "2. **Deteccion Automatica de Interacciones**: Permite capturar de manera nativa la relacion sinergica entre multiples variables (como la Edad en combinacion con el Sexo o la ubicacion en un Municipio rural especifico) sin necesidad de formular manualmente interacciones complejas.\n",
+            "3. **Manejo Efectivo del Desbalance**: Al aplicar la ponderacion estrategica (`class_weight='balanced'`), Random Forest modifica la evaluacion de Gini en cada nodo de cada arbol individual, forzando a los estimadores a tomar decisiones robustas para no omitir la clase minoritaria (Graves/Fallecidos), logrando un Recall muy superior.\n",
+            "4. **Reduccion de Varianza (Bagging)**: Promedia las predicciones de **100 estimadores independientes** entrenados sobre muestras aleatorias del conjunto de datos y variables. Esto reduce drasticamente la varianza, protegiendo al modelo del sobreajuste (overfitting) frente al ruido de los datos."
         ]
     })
     
